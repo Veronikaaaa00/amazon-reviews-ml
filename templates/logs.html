@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Логи — Amazon Reviews AI{% endblock %}
+
+{% block content %}
+<h1>Логи Amazon Reviews AI</h1>
+<p class="subtitle">Последние 50 записей из app.log (только для администратора)</p>
+
+<div class="card fade-in">
+    <div class="card-title">
+        <span class="icon"></span> Журнал запросов
+        <a href="/logs" class="btn btn-secondary" style="margin-left: auto; font-size: 0.8rem;">
+            Обновить
+        </a>
+    </div>
+
+    {% if logs %}
+    <div class="log-viewer">
+        {% for line in logs %}
+        <div class="log-line">{{ line }}</div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: var(--text-secondary);">Логи пока пусты.</p>
+    {% endif %}
+</div>
+{% endblock %}

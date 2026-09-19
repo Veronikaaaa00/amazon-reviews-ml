@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ML-продукт для анализа отзывов на товары Amazon">
+    <title>{% block title %}ML Анализ Отзывов{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="nav-logo">Amazon Reviews AI</a>
+            <ul class="nav-links">
+                <li><a href="/" class="{{ 'active' if active_page == 'index' }}">Главная</a></li>
+                <li><a href="/statistics" class="{{ 'active' if active_page == 'statistics' }}">Статистика</a></li>
+                <li><a href="/models" class="{{ 'active' if active_page == 'models' }}">Модели</a></li>
+                <li><a href="/clusters" class="{{ 'active' if active_page == 'clusters' }}">Кластеры</a></li>
+                <li><a href="/logs" class="{{ 'active' if active_page == 'logs' }}">Логи</a></li>
+            </ul>
+        </div>
+    </nav>
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

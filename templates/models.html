@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Сравнение моделей — Amazon Reviews{% endblock %}
+
+{% block content %}
+<h1>Сравнение моделей</h1>
+<p class="subtitle">5 моделей классификации тональности отзывов Amazon — метрики до и после GridSearchCV, ROC-кривые</p>
+
+<div style="margin-bottom: 1.5rem;">
+    <a href="/generate_report" class="btn" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #6c5ce7, #a855f7); color: #fff; border-radius: 12px; text-decoration: none; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);"
+       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(108,92,231,0.5)'"
+       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(108,92,231,0.3)'">
+        Скачать отчёт (PNG)
+    </a>
+</div>
+{% if results %}
+<!-- Таблица метрик до GridSearch -->
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> Метрики до GridSearchCV</div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Модель</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, res in results.items() %}
+                <tr>
+                    <td><strong>{{ name }}</strong></td>
+                    <td>{{ "%.2f" | format(res.metrics_before.accuracy * 100) }}%</td>
+                    <td>{{ "%.2f" | format(res.metrics_before.precision * 100) }}%</td>
+                    <td>{{ "%.2f" | format(res.metrics_before.recall * 100) }}%</td>
+                    <td>{{ "%.2f" | format(res.metrics_before.f1 * 100) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Таблица метрик после GridSearch -->
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> Метрики после GridSearchCV</div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Модель</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>ROC AUC</th>
+                    <th>Лучшие параметры</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, res in results.items() %}
+                <tr>
+                    <td><strong>{{ name }}</strong></td>
+                    <td class="{% if res.metrics_after.accuracy > res.metrics_before.accuracy %}metric-better{% elif res.metrics_after.accuracy < res.metrics_before.accuracy %}metric-worse{% endif %}">
+                        {{ "%.2f" | format(res.metrics_after.accuracy * 100) }}%
+                    </td>
+                    <td class="{% if res.metrics_after.precision > res.metrics_before.precision %}metric-better{% elif res.metrics_after.precision < res.metrics_before.precision %}metric-worse{% endif %}">
+                        {{ "%.2f" | format(res.metrics_after.precision * 100) }}%
+                    </td>
+                    <td class="{% if res.metrics_after.recall > res.metrics_before.recall %}metric-better{% elif res.metrics_after.recall < res.metrics_before.recall %}metric-worse{% endif %}">
+                        {{ "%.2f" | format(res.metrics_after.recall * 100) }}%
+                    </td>
+                    <td class="{% if res.metrics_after.f1 > res.metrics_before.f1 %}metric-better{% elif res.metrics_after.f1 < res.metrics_before.f1 %}metric-worse{% endif %}">
+                        {{ "%.2f" | format(res.metrics_after.f1 * 100) }}%
+                    </td>
+                    <td>{{ "%.2f" | format(res.roc.auc * 100) }}%</td>
+                    <td style="font-size: 0.75rem; max-width: 200px; word-wrap: break-word;">
+                        {% for k, v in res.best_params.items() %}
+                        {{ k }}={{ v }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Сводная таблица: до vs после -->
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> Изменение F1 после GridSearchCV</div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Модель</th>
+                    <th>F1 до</th>
+                    <th>F1 после</th>
+                    <th>Δ F1</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, res in results.items() %}
+                {% set delta = res.metrics_after.f1 - res.metrics_before.f1 %}
+                <tr>
+                    <td><strong>{{ name }}</strong></td>
+                    <td>{{ "%.2f" | format(res.metrics_before.f1 * 100) }}%</td>
+                    <td>{{ "%.2f" | format(res.metrics_after.f1 * 100) }}%</td>
+                    <td class="{% if delta > 0 %}metric-better{% elif delta < 0 %}metric-worse{% else %}metric-same{% endif %}">
+                        {{ "%+.2f" | format(delta * 100) }}%
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ROC-кривые -->
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> ROC-кривые</div>
+    <div id="roc-chart" style="height: 500px;"></div>
+</div>
+
+{% else %}
+<div class="card">
+    <p style="color: var(--text-secondary);">Модели ещё не обучены. Запустите <code>python ml_models.py</code> для обучения.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if results %}
+<script>
+const results = {{ results | tojson }};
+const colors = ['#6c5ce7', '#fd79a8', '#00cec9', '#fdcb6e', '#e17055'];
+const traces = [];
+let i = 0;
+
+for (const [name, res] of Object.entries(results)) {
+    traces.push({
+        x: res.roc.fpr,
+        y: res.roc.tpr,
+        mode: 'lines',
+        name: `${name} (AUC=${res.roc.auc})`,
+        line: { color: colors[i % colors.length], width: 2 }
+    });
+    i++;
+}
+
+// Diagonal
+traces.push({
+    x: [0, 1], y: [0, 1],
+    mode: 'lines',
+    name: 'Random',
+    line: { color: 'rgba(255,255,255,0.2)', dash: 'dash', width: 1 },
+    showlegend: false
+});
+
+Plotly.newPlot('roc-chart', traces, {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#a0a0b8', family: 'Inter' },
+    xaxis: { title: 'False Positive Rate', gridcolor: 'rgba(255,255,255,0.05)', range: [0, 1] },
+    yaxis: { title: 'True Positive Rate', gridcolor: 'rgba(255,255,255,0.05)', range: [0, 1] },
+    legend: { bgcolor: 'rgba(0,0,0,0.3)', bordercolor: 'rgba(255,255,255,0.1)', x: 0.5, y: 0.02 },
+    margin: { t: 20, r: 30, b: 60, l: 60 }
+}, { responsive: true, displayModeBar: false });
+</script>
+{% endif %}
+{% endblock %}

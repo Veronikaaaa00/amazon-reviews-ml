@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Статистика товаров Amazon{% endblock %}
+
+{% block content %}
+<h1>Статистика товаров Amazon</h1>
+<p class="subtitle">Средний рейтинг, количество отзывов и доля позитивных отзывов по каждому товару Amazon</p>
+
+<div class="stats-grid fade-in">
+    <div class="stat-box">
+        <div class="stat-value">{{ stats | length }}</div>
+        <div class="stat-label">Товаров (≥3 отзывов)</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ "%.1f" | format(avg_positive) }}%</div>
+        <div class="stat-label">Средняя доля позитива</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ "%.2f" | format(avg_all_rating) }}</div>
+        <div class="stat-label">Средний рейтинг</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ total_reviews }}</div>
+        <div class="stat-label">Всего отзывов</div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> Таблица товаров</div>
+    <div class="table-wrapper">
+        <table id="products-table">
+            <thead>
+                <tr>
+                    <th style="cursor:pointer" onclick="sortTable(0)">Товар (ASIN)</th>
+                    <th style="cursor:pointer" onclick="sortTable(1)">Название товара</th>
+                    <th style="cursor:pointer" onclick="sortTable(2)">Отзывов</th>
+                    <th style="cursor:pointer" onclick="sortTable(3)">Средний рейтинг</th>
+                    <th style="cursor:pointer" onclick="sortTable(4)">% позитива</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in stats %}
+                <tr>
+                    <td><code>{{ item.product_id[:15] }}</code></td>
+                    <td>{{ item.product_name[:60] }}</td>
+                    <td>{{ item.review_count }}</td>
+                    <td>
+                        <span class="badge {% if item.avg_rating >= 4 %}badge-positive{% elif item.avg_rating <= 2.5 %}badge-negative{% else %}badge-neutral{% endif %}">
+                            {{ item.avg_rating }}
+                        </span>
+                    </td>
+                    <td>{{ item.positive_share }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Топ-10 товаров Amazon по рейтингу</div>
+        <div id="top-rating-chart"></div>
+    </div>
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Топ-10 по количеству отзывов</div>
+        <div id="top-count-chart"></div>
+    </div>
+</div>
+
+{% if neg_words %}
+<div class="card fade-in" style="margin-top: 2rem;">
+    <div class="card-title"><span class="icon"></span> Топ слов в негативных отзывах (1-2 звезды)</div>
+    <p class="subtitle" style="margin-bottom: 1rem;">Самые частые слова в отзывах с оценкой 1 или 2 звезды (без стоп-слов)</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+        {% for word, count in neg_words %}
+        <div style="background: rgba(255, 71, 87, 0.15); border: 1px solid rgba(255, 71, 87, 0.3); border-radius: 12px; padding: 0.6rem 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: #ff4757; font-weight: 600; font-size: 1rem;">{{ word }}</span>
+            <span style="color: #a0a0b8; font-size: 0.85rem;">({{ count }})</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function sortTable(col) {
+    const table = document.getElementById('products-table');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const isNum = col >= 2;
+
+    rows.sort((a, b) => {
+        let va = a.cells[col].textContent.trim().replace('%', '');
+        let vb = b.cells[col].textContent.trim().replace('%', '');
+        if (isNum) return parseFloat(vb) - parseFloat(va);
+        return va.localeCompare(vb);
+    });
+
+    const tbody = table.querySelector('tbody');
+    rows.forEach(r => tbody.appendChild(r));
+}
+
+const stats = {{ stats | tojson }};
+const topRating = stats.slice().sort((a, b) => b.avg_rating - a.avg_rating).slice(0, 10);
+const topCount = stats.slice().sort((a, b) => b.review_count - a.review_count).slice(0, 10);
+
+const plotLayout = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#a0a0b8', family: 'Inter' },
+    margin: { t: 10, r: 20, b: 40, l: 150 }
+};
+
+function uniqueLabels(items, field, maxLen) {
+    const seen = {};
+    return items.map((s, i) => {
+        let label = s[field] ? s[field].substring(0, maxLen) : 'N/A';
+        if (seen[label]) {
+            seen[label]++;
+            label += ' (' + seen[label] + ')';
+        } else {
+            seen[label] = 1;
+        }
+        return label;
+    });
+}
+
+Plotly.newPlot('top-rating-chart', [{
+    y: uniqueLabels(topRating, 'product_name', 30),
+    x: topRating.map(s => s.avg_rating),
+    text: topRating.map(s => s.avg_rating.toFixed(2)),
+    textposition: 'inside',
+    textfont: { color: '#fff', size: 12 },
+    type: 'bar',
+    orientation: 'h',
+    marker: { color: '#00cec9' }
+}], {...plotLayout, xaxis: {title: 'Рейтинг (1-5)', gridcolor: 'rgba(255,255,255,0.05)', range: [0, 5], dtick: 1}},
+    {responsive: true, displayModeBar: false});
+
+Plotly.newPlot('top-count-chart', [{
+    y: uniqueLabels(topCount, 'product_name', 30),
+    x: topCount.map(s => s.review_count),
+    text: topCount.map(s => s.review_count.toString()),
+    textposition: 'inside',
+    textfont: { color: '#fff', size: 12 },
+    type: 'bar',
+    orientation: 'h',
+    marker: { color: '#6c5ce7' }
+}], {...plotLayout, xaxis: {title: 'Отзывов', gridcolor: 'rgba(255,255,255,0.05)'}},
+    {responsive: true, displayModeBar: false});
+</script>
+{% endblock %}

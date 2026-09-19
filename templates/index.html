@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Amazon Reviews AI — Главная{% endblock %}
+
+{% block content %}
+<h1>Анализ отзывов Amazon</h1>
+<p class="subtitle">Amazon Products Reviews — интеллектуальный анализ тональности, рекомендации и аналитика</p>
+
+<div class="stats-grid fade-in">
+    <div class="stat-box">
+        <div class="stat-value">{{ total_reviews }}</div>
+        <div class="stat-label">Всего отзывов</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ total_products }}</div>
+        <div class="stat-label">Товаров Amazon</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ avg_rating }}</div>
+        <div class="stat-label">Средний рейтинг</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ best_model_name }}</div>
+        <div class="stat-label">Лучшая модель</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Форма отзыва -->
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Оставить отзыв на товар</div>
+        <form method="POST" action="/submit_review">
+            <div class="form-group">
+                <label for="review-product">Товар Amazon</label>
+                <select name="product_id" id="review-product" class="form-control" required>
+                    {% for p in products %}
+                    <option value="{{ p.product_id }}">{{ p.product_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="review-text">Текст отзыва</label>
+                <textarea name="review_text" id="review-text" class="form-control"
+                          placeholder="Напишите ваш отзыв о товаре Amazon..." required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="review-rating">Оценка (1-5)</label>
+                <select name="rating" id="review-rating" class="form-control" required>
+                    <option value="5">5 — Отлично</option>
+                    <option value="4">4 — Хорошо</option>
+                    <option value="3">3 — Нормально</option>
+                    <option value="2">2 — Плохо</option>
+                    <option value="1">1 — Ужасно</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Отправить отзыв</button>
+        </form>
+
+        <!-- Анализ тональности -->
+        <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+            <div class="card-title"><span class="icon"></span> Анализ тональности</div>
+            <div class="form-group">
+                <textarea id="sentiment-text" class="form-control"
+                          placeholder="Введите текст для анализа тональности..."></textarea>
+            </div>
+            <button onclick="analyzeSentiment()" class="btn btn-secondary" id="analyze-btn">
+                Анализировать
+            </button>
+            <div id="sentiment-result"></div>
+        </div>
+    </div>
+
+    <!-- Рекомендации -->
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Рекомендации товаров для вас</div>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+            User ID: <code>{{ user_id[:8] }}...</code>
+        </p>
+        <div class="rec-list">
+            {% if recommendations %}
+                {% for rec in recommendations %}
+                <div class="rec-item">
+                    <span class="rec-name">{{ rec.product_name }}</span>
+                    <span class="rec-rating">{{ rec.predicted_rating }}</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                    Оставьте несколько отзывов на товары, чтобы получить персонализированные рекомендации.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Графики -->
+<div class="grid-2" style="margin-top: 0;">
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Распределение оценок</div>
+        <div id="ratings-chart"></div>
+    </div>
+    <div class="card fade-in">
+        <div class="card-title"><span class="icon"></span> Динамика отзывов</div>
+        <div id="dynamics-chart"></div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <div class="card-title"><span class="icon"></span> Облако слов</div>
+    <div style="text-align: center;">
+        <img src="/wordcloud" alt="Word Cloud" style="max-width: 100%; border-radius: var(--radius-sm);">
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function analyzeSentiment() {
+    const text = document.getElementById('sentiment-text').value;
+    if (!text.trim()) return;
+
+    const btn = document.getElementById('analyze-btn');
+    btn.innerHTML = '<span class="spinner"></span> Анализ...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text: text})
+        });
+        const data = await resp.json();
+
+        const cls = data.sentiment === 'позитивный' ? 'positive' : 'negative';
+        document.getElementById('sentiment-result').innerHTML = `
+            <div class="sentiment-result sentiment-${cls}">
+                <div class="sentiment-label">${data.sentiment.toUpperCase()}</div>
+                <div class="sentiment-confidence">Уверенность: ${data.confidence}%</div>
+            </div>
+        `;
+    } catch(e) {
+        document.getElementById('sentiment-result').innerHTML =
+            '<div class="flash flash-error">Ошибка при анализе</div>';
+    }
+    btn.innerHTML = 'Анализировать';
+    btn.disabled = false;
+}
+
+// Ratings chart
+const ratingsData = {{ ratings_data | tojson }};
+Plotly.newPlot('ratings-chart', [{
+    x: ratingsData.labels,
+    y: ratingsData.values,
+    type: 'bar',
+    marker: {
+        color: ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#27ae60'],
+        line: { color: 'rgba(255,255,255,0.1)', width: 1 }
+    }
+}], {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#a0a0b8', family: 'Inter' },
+    xaxis: { title: 'Оценка', gridcolor: 'rgba(255,255,255,0.05)' },
+    yaxis: { title: 'Количество', gridcolor: 'rgba(255,255,255,0.05)' },
+    margin: { t: 10, r: 20, b: 50, l: 50 }
+}, { responsive: true, displayModeBar: false });
+
+// Dynamics chart
+const dynData = {{ dynamics_data | tojson }};
+Plotly.newPlot('dynamics-chart', [{
+    x: dynData.dates,
+    y: dynData.counts,
+    type: 'scatter',
+    mode: 'lines',
+    line: { color: '#6c5ce7', width: 2 },
+    fill: 'tozeroy',
+    fillcolor: 'rgba(108, 92, 231, 0.1)'
+}], {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#a0a0b8', family: 'Inter' },
+    xaxis: { title: 'Дата', gridcolor: 'rgba(255,255,255,0.05)' },
+    yaxis: { title: 'Отзывов', gridcolor: 'rgba(255,255,255,0.05)' },
+    margin: { t: 10, r: 20, b: 50, l: 50 }
+}, { responsive: true, displayModeBar: false });
+</script>
+{% endblock %}
